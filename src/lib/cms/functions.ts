@@ -17,32 +17,57 @@ const requireAdmin = createMiddleware({ type: "function" }).server(async ({ next
   return next({ context: { supabase: supabaseAdmin } });
 });
 export const getPublicContent = createServerFn({ method: "GET" }).handler(async () => {
-  const url = process.env["SUPABASE_URL"];
-  const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
-  if (!url || !key) throw new Error("Website content is temporarily unavailable.");
-  const client = createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: {
-      fetch: (input, init) => {
-        const h = new Headers(init?.headers);
-        if (key.startsWith("sb_") && h.get("Authorization") === `Bearer ${key}`)
-          h.delete("Authorization");
-        h.set("apikey", key);
-        return fetch(input, { ...init, headers: h });
+  const url =
+    process.env["SUPABASE_URL"] ||
+    process.env["VITE_SUPABASE_URL"] ||
+    "https://rhsqtfzjmwkcciztrryg.supabase.co";
+  const key =
+    process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+    process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+    "sb_publishable_TmTGwuchk998YHUJ4Ghrjw_kGeCoonl";
+
+  const defaultSettings = {
+    id: "main",
+    contact_email: "Syedabdullahmadani0408@gmail.com",
+    contact_phone: "+91 70137 03786",
+    whatsapp_number: "917013703786",
+    footer_description:
+      "Business advisory, outsourced sales, and offshore support. Practical capabilities for a global world.",
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    const client = createClient<Database>(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: (input, init) => {
+          const h = new Headers(init?.headers);
+          if (key.startsWith("sb_") && h.get("Authorization") === `Bearer ${key}`)
+            h.delete("Authorization");
+          h.set("apikey", key);
+          return fetch(input, { ...init, headers: h });
+        },
       },
-    },
-  });
-  const [jobs, settings] = await Promise.all([
-    client
-      .from("jobs")
-      .select("*")
-      .eq("status", "published")
-      .order("created_at", { ascending: false }),
-    client.from("site_settings").select("*").eq("id", "main").single(),
-  ]);
-  if (jobs.error || settings.error)
-    throw new Error("Website content could not be loaded. Please try again.");
-  return { jobs: jobs.data, settings: settings.data };
+    });
+    const [jobs, settings] = await Promise.all([
+      client
+        .from("jobs")
+        .select("*")
+        .eq("status", "published")
+        .order("created_at", { ascending: false }),
+      client.from("site_settings").select("*").eq("id", "main").single(),
+    ]);
+    return {
+      jobs: jobs.data ?? [],
+      settings: settings.data ?? defaultSettings,
+    };
+  } catch (err) {
+    console.error("Public content loading error, falling back to defaults:", err);
+    return {
+      jobs: [],
+      settings: defaultSettings,
+    };
+  }
 });
 export const adminContent = createServerFn({ method: "GET" })
   .middleware([requireAdmin])
